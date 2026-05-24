@@ -1,0 +1,83 @@
+# Environment Variables and Secrets
+.env
+.env.local
+.env.*
+*.env
+*.key
+*.pem
+secrets.json
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+pyvenv.cfg
+.python-version
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.pyo
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Node.js and Frontend Packages
+node_modules/
+/frontend/node_modules/
+jspm_packages/
+.npm
+.eslintcache
+.parcel-cache
+.next/
+.nuxt/
+out/
+build/
+dist/
+/frontend/dist/
+/frontend/build/
+
+# Local databases and caches
+backend/cache/
+*.db
+*.sqlite
+*.sqlite3
+cache/
+qdrant_storage/
+
+# Temporary / Scratch Files
+scratch/
+tmp/
+temp/
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini

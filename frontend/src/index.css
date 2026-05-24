@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --bg-primary: #090d16;
+  --bg-secondary: rgba(15, 23, 42, 0.45);
+  --bg-card: rgba(30, 41, 59, 0.35);
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+  --accent-green: #10b981;
+  --accent-orange: #f59e0b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border-glass: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --glow-blue: rgba(59, 130, 246, 0.15);
+  --glow-purple: rgba(139, 92, 246, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Glowing background ambient orbs */
+body::before, body::after {
+  content: '';
+  position: absolute;
+  width: 40vw;
+  height: 40vw;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+body::before {
+  top: -10vw;
+  left: -10vw;
+  background: var(--glow-blue);
+}
+
+body::after {
+  bottom: -10vw;
+  right: -10vw;
+  background: var(--glow-purple);
+}
+
+/* Webkit Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+pre, code {
+  font-family: 'JetBrains Mono', monospace;
+}
