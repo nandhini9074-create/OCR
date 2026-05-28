@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     # Setup cache database
     get_cache()
     
-    # Setup Email intelligence SQLite database
+    # Setup Email intelligence PostgreSQL database
     from app.models.database import init_db
     init_db()
     logger.info("Email intelligence SQL metadata database initialized.")

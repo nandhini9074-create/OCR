@@ -1,0 +1,18 @@
+{
+    "raw_email_details": {
+        "matched_email": true,
+        "email_subject": "successfully completed the course on Apache Flink",
+        "email_sender": "\"Nandhini.S\" <nandhini.cse1104@gmail.com>",
+        "email_date": "Fri, 22 May 2026 15:34:38 +0530",
+        "extracted_event_details": "Nandhini.S successfully completed the Apache Flink course and received certification.",
+        "email_body": "successfully completed the course and get certification on Apache Flink",
+        "warning_message": null
+    },
+    "abstracted_details": {
+        "event_name": "Apache Flink course",
+        "issuer": "Apache Flink platform",
+        "recipient": "Nandhini.S",
+        "date": "2026-05-22",
+        "description": "Nandhini.S successfully completed the Apache Flink course and received certification."
+    }
+}

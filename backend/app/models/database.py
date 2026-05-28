@@ -61,6 +61,18 @@ class EmailMetadata(Base):
 
     user = relationship("User", back_populates="emails")
 
+class OCRCache(Base):
+    __tablename__ = "ocr_cache"
+    file_hash = Column(String, primary_key=True, index=True)
+    raw_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class PipelineCache(Base):
+    __tablename__ = "pipeline_cache"
+    file_hash = Column(String, primary_key=True, index=True)
+    result_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class SyncLog(Base):
     __tablename__ = "sync_logs"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -74,15 +86,9 @@ class SyncLog(Base):
 # Database Engine Init
 DATABASE_URL = os.getenv("DATABASE_URL") or os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
-    cache_dir = Path(__file__).resolve().parents[2] / "cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    db_path = cache_dir / "email_intelligence.db"
-    DATABASE_URL = f"sqlite:///{db_path}"
+    raise ValueError("DATABASE_URL environment variable is not set. A PostgreSQL connection string is required.")
 
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-)
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():

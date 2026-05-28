@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.schemas.models import CertificateData
-from app.qdrant import get_qdrant_store
+from app.qdrant.qdrant_client import get_qdrant_store
 from app.embeddings.embedder import get_embedder
 
 logger = logging.getLogger("certificate_intelligence.pipeline_qdrant")
@@ -17,8 +17,12 @@ async def search_qdrant_emails(cert: CertificateData, email: Optional[str]) -> L
         if cert.date and cert.date.lower() != "n/a": qp.append(f"on {cert.date}")
         q_text = " ".join(qp) if qp else "congratulations certificate registration completion"
         logger.info(f"Generating query embedding for search: '{q_text}'")
+        if not email:
+            logger.warning("No email provided, skipping Qdrant vector search.")
+            return []
+            
         q_vector = await get_embedder().get_embedding(q_text)
-        hits = await get_qdrant_store().search_semantic(user_id=email or "alex@example.com", query_vector=q_vector, limit=5, score_threshold=0.3)
+        hits = await get_qdrant_store().search_semantic(user_id=email, query_vector=q_vector, limit=3, score_threshold=0.3)
         return [{
             "id": h["email_id"], "subject": h["subject"], "sender": h["sender"],
             "date": h.get("timestamp").isoformat() if isinstance(h.get("timestamp"), datetime) else (h.get("timestamp") or "N/A"),

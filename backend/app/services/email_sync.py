@@ -6,7 +6,7 @@ from app.models.database import SessionLocal, OAuthToken, EmailMetadata, SyncLog
 from app.auth.google import get_google_oauth
 from app.services.text_processor import get_text_processor
 from app.embeddings.embedder import get_embedder
-from app.qdrant import get_qdrant_store
+from app.qdrant.qdrant_client import get_qdrant_store
 
 logger = logging.getLogger("certificate_intelligence.services.email_sync")
 
@@ -52,6 +52,11 @@ class EmailIngestService:
                 clean_body = self.text_processor.remove_signature(self.text_processor.clean_html(m["body"]))
                 chunks = self.text_processor.chunk_text(clean_body)
                 importance = self._calculate_importance(m["subject"] + " " + clean_body)
+                
+                # Phase 1 Optimization: Only store emails in DB and Qdrant if they are certificate-related
+                if importance <= 0.1:
+                    continue
+
                 db.add(EmailMetadata(
                     user_id=user_id, email_id=m["id"], thread_id=m.get("thread_id"), subject=m["subject"],
                     sender=m["sender"], recipients=m.get("recipients", ""), timestamp=m["timestamp"], importance_score=importance
@@ -86,9 +91,17 @@ class EmailIngestService:
         return min(round(0.1 + sum(val for kw, val in keywords.items() if kw in text.lower()), 2), 1.0)
 
     async def _fetch_gmail_emails(self, token: str) -> List[Dict[str, Any]]:
+        import urllib.parse
+        
+        # 24-month keyword filter for sync
+        since = (datetime.now() - timedelta(days=365*2)).strftime("%Y/%m/%d")
+        q_raw = f"after:{since} (certificate OR credential OR completion OR workshop OR hackathon OR internship OR course)"
+        q_encoded = urllib.parse.quote(q_raw)
+        
         emails, headers = [], {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient() as client:
-            res = await client.get("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20", headers=headers)
+            url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=200&q={q_encoded}"
+            res = await client.get(url, headers=headers)
             res.raise_for_status()
             for msg in res.json().get("messages", []):
                 m_res = await client.get(f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg['id']}", headers=headers)

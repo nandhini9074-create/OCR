@@ -124,23 +124,28 @@ function App() {
   };
 
   // Trigger mailbox incremental synchronization
-  const handleTriggerSync = async (provider) => {
-    if (!userEmail.trim()) {
+  const handleTriggerSync = async (provider, overrideEmail = null) => {
+    const targetEmail = overrideEmail || userEmail;
+    if (!targetEmail.trim()) {
       setEmailHubError('Please enter a valid email address first.');
+      setError('Please enter a valid email address first.');
       return;
     }
     setEmailHubError(null);
+    setError(null);
     setSyncLoading(true);
     try {
       const res = await fetch(
-        `${API_BASE_URL}/emails/sync?user_id=${encodeURIComponent(userEmail.trim())}&provider=${provider}`
+        `${API_BASE_URL}/emails/sync?user_id=${encodeURIComponent(targetEmail.trim())}&provider=${provider}`
       );
       if (!res.ok) throw new Error('Mailbox synchronization request failed.');
       
       // Instantly query status database to display progress
-      await fetchSyncStatus();
+      await fetchSyncStatus(targetEmail);
+      alert('Sync completed successfully!');
     } catch (err) {
       setEmailHubError(err.message || 'Failed to initiate background sync.');
+      setError(err.message || 'Failed to initiate background sync.');
     } finally {
       setSyncLoading(false);
     }
@@ -676,6 +681,43 @@ function App() {
                     : clearCacheStatus === 'done' ? 'Cache Cleared — Ready for Fresh Analysis'
                     : clearCacheStatus === 'error' ? 'Clear Failed — Try Again'
                     : 'Clear Analysis Cache (Force Fresh OCR)'}
+                </button>
+
+                {/* Background Sync button for Main Dashboard */}
+                <button
+                  type="button"
+                  onClick={() => handleTriggerSync('google', email)}
+                  disabled={loading || syncLoading}
+                  style={{
+                    width: '100%',
+                    marginTop: '0.65rem',
+                    padding: '0.6rem 1rem',
+                    background: syncLoading ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.15)',
+                    border: `1px solid rgba(59,130,246,0.3)`,
+                    borderRadius: '10px',
+                    color: '#60a5fa',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    cursor: (loading || syncLoading) ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    transition: 'all 0.2s ease',
+                    opacity: (loading || syncLoading) ? 0.7 : 1,
+                  }}
+                >
+                  {syncLoading ? (
+                    <>
+                      <Server size={14} className="loader-spinner" style={{ animation: 'spin 1s infinite linear' }} />
+                      Syncing Inbox (This takes a minute)...
+                    </>
+                  ) : (
+                    <>
+                      <Database size={14} />
+                      Sync Inbox to Vector Database
+                    </>
+                  )}
                 </button>
 
               </form>

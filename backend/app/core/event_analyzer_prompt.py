@@ -5,8 +5,8 @@ def build_event_analyzer_prompt(
     cert_data: CertificateData, search_results: List[Dict[str, Any]], email_data: Optional[Dict[str, Any]] = None
 ) -> str:
     search_context = "".join([
-        f"Result {i}:\nTitle: {r.get('title')}\nSource: {r.get('url')}\nContent: {r.get('snippet') or r.get('content')}\n\n"
-        for i, r in enumerate(search_results, 1)
+        f"Result {i}:\nTitle: {r.get('title')}\nSource: {r.get('url')}\nContent: {str(r.get('snippet') or r.get('content') or '')[:400]}\n\n"
+        for i, r in enumerate(search_results[:3], 1)
     ]) if search_results else "No additional web search results are available."
 
     email_context = (

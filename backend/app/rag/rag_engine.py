@@ -2,7 +2,7 @@ import os, asyncio, logging
 from typing import Dict, Any, List
 from openai import OpenAI
 from app.embeddings.embedder import get_embedder
-from app.qdrant import get_qdrant_store
+from app.qdrant.qdrant_client import get_qdrant_store
 
 logger = logging.getLogger("certificate_intelligence.rag.rag_engine")
 
@@ -20,7 +20,7 @@ class RAGEngine:
         if not query_vector:
             return {"query": query, "matches": [], "summary": "Error: Failed to generate query embedding vector."}
 
-        hits = await self.qdrant.search_semantic(user_id=user_id, query_vector=query_vector, limit=limit, score_threshold=0.20)
+        hits = await self.qdrant.search_semantic(user_id=user_id, query_vector=query_vector, limit=limit, score_threshold=0.30)
         if not hits:
             logger.info("Qdrant semantic search returned 0 matches.")
             return {"query": query, "matches": [], "summary": "I searched your mailbox thoroughly but could not find any emails relevant to your query. Please make sure your inbox is fully synchronized."}
@@ -54,7 +54,7 @@ class RAGEngine:
                         {"role": "system", "content": "You are a professional mailbox summarization and retrieval expert."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.2, max_tokens=600
+                    temperature=0.2, max_tokens=1000
                 )
             )
             return res.choices[0].message.content.strip()

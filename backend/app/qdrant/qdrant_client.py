@@ -59,7 +59,7 @@ class QdrantVectorStore:
             return False
 
     async def search_semantic(
-        self, user_id: str, query_vector: List[float], limit: int = 6, score_threshold: float = 0.25
+        self, user_id: str, query_vector: List[float], limit: int = 6, score_threshold: float = 0.3
     ) -> List[Dict[str, Any]]:
         try:
             tenant_filter = Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))])
@@ -90,3 +90,5 @@ def get_qdrant_store() -> QdrantVectorStore:
     if _qdrant_instance is None:
         _qdrant_instance = QdrantVectorStore()
     return _qdrant_instance
+
+# Trigger reload

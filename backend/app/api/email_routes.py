@@ -9,21 +9,24 @@ from app.models.database import get_db, OAuthToken, User, SyncLog, EmailMetadata
 from app.auth.google import get_google_oauth
 from app.services.email_sync import get_email_sync_service
 from app.rag.rag_engine import get_rag_engine
-from app.qdrant import get_qdrant_store
+from app.qdrant.qdrant_client import get_qdrant_store
 from app.embeddings.embedder import get_embedder
 
 router = APIRouter()
 
+# Used to enforce the input schema for vector search API requests
 class SearchQuery(BaseModel):
     user_id: str
     query: str
     limit: Optional[int] = 5
 
+# Used to enforce the input schema for generative RAG API requests
 class RAGQuery(BaseModel):
     user_id: str
     query: str
     limit: Optional[int] = 5
 
+# Used to securely save or update the OAuth tokens in the PostgreSQL database after successful login
 def _save_oauth_token(user_id: str, provider: str, tokens: dict, db: Session):
     if not db.query(User).filter(User.user_id == user_id).first():
         db.add(User(user_id=user_id))
@@ -37,10 +40,12 @@ def _save_oauth_token(user_id: str, provider: str, tokens: dict, db: Session):
         if tokens.get("refresh_token"): token_record.refresh_token = tokens["refresh_token"]
     db.commit()
 
+# Used to start the Google OAuth flow by redirecting the user to the Google login screen
 @router.get("/auth/google/login", summary="Initiate Google OAuth Flow")
 async def google_login(user_id: str = Query(..., description="Unique ID of the user requesting authorization")):
     return {"redirect_url": get_google_oauth().get_authorization_url(user_id)}
 
+# Used to receive the temporary authorization code from Google and exchange it for permanent access tokens
 @router.get("/auth/google/callback", summary="Google Callback Endpoint")
 async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
     try:
@@ -50,6 +55,7 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OAuth login callback failed: {str(e)}")
 
+# Used to tell the server to start downloading and vectorizing emails in the background without freezing the UI
 @router.get("/emails/sync", summary="Trigger Asynchronous Email Indexing Sync")
 async def trigger_inbox_sync(user_id: str, provider: str, background_tasks: BackgroundTasks):
     if provider != "google":
@@ -57,6 +63,7 @@ async def trigger_inbox_sync(user_id: str, provider: str, background_tasks: Back
     background_tasks.add_task(get_email_sync_service().synchronize_user_inbox, user_id, provider)
     return {"status": "syncing", "message": "Synchronizing inbox via google in the background. Check /emails/status for updates."}
 
+# Used by the frontend to poll the database and check how many emails have been downloaded so far
 @router.get("/emails/status", summary="Check Ingestion Progress Logs")
 async def get_sync_status(user_id: str, db: Session = Depends(get_db)):
     logs = db.query(SyncLog).filter(SyncLog.user_id == user_id).order_by(SyncLog.timestamp.desc()).all()
@@ -67,6 +74,7 @@ async def get_sync_status(user_id: str, db: Session = Depends(get_db)):
         "sync_history": [{"id": l.id, "provider": l.provider, "status": l.status, "emails_synced": l.emails_synced, "timestamp": l.timestamp.isoformat(), "error_message": l.error_message} for l in logs]
     }
 
+# Used to let users search their own emails using AI Meaning (Semantics) instead of just keywords
 @router.post("/search", summary="Vector Semantic Similarity Search")
 async def semantic_search(query: SearchQuery):
     vec = await get_embedder().get_embedding(query.query)
@@ -80,6 +88,7 @@ async def semantic_search(query: SearchQuery):
         } for h in hits]
     }
 
+# Used to ask a conversational AI a question about your emails (e.g. 'When did I finish Python Bootcamp?')
 @router.post("/rag/query", summary="RAG Conversation Q&A Synthesizer")
 async def rag_query(query: RAGQuery):
     try:
@@ -87,6 +96,7 @@ async def rag_query(query: RAGQuery):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG query execution failed: {str(e)}")
 
+# Used to completely wipe a user's data from PostgreSQL and Qdrant to comply with privacy laws (GDPR)
 @router.delete("/emails/delete", summary="GDPR Wiping & Data Revocation")
 async def delete_user_emails(user_id: str, db: Session = Depends(get_db)):
     try:

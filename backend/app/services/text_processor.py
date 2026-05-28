@@ -2,7 +2,7 @@ import re
 from typing import List
 
 class EmailTextProcessor:
-    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150):
+    def __init__(self, chunk_size: int = 100, chunk_overlap: int = 50):
         self.chunk_size, self.chunk_overlap = chunk_size, chunk_overlap
 
     def clean_html(self, html: str) -> str:

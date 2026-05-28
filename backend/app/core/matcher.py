@@ -18,13 +18,13 @@ class CertificateEmailMatcher:
         if not emails: return None, 0.0
         scored = sorted([(calculate_heuristic_score(cert, item, user_email), idx, item) for idx, item in enumerate(emails)], key=lambda x: x[0], reverse=True)
         logger.info("Heuristic matching scores:")
-        for score, idx, item in scored[:5]:
+        for score, idx, item in scored[:3]:
             logger.info(f" - Index {idx} [Score: {score:.2f}]: '{item.get('subject')}'")
         if scored[0][0] <= 0.1:
             logger.info("Top heuristic score too low (<= 0.1). Skipping LLM verification.")
             return None, 0.0
 
-        top_candidates = [item for _, _, item in scored[:4]]
+        top_candidates = [item for _, _, item in scored[:3]]
         prompt = build_matcher_prompt(cert, top_candidates, user_email, search_results)
         logger.info("Triggering cognitive LLM matcher verification...")
         try:

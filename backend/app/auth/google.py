@@ -6,22 +6,25 @@ from typing import Dict, Any
 
 logger = logging.getLogger("certificate_intelligence.auth.google")
 
+# Used to handle all secure communication and token management with Google's OAuth 2.0 servers
 class GoogleOAuth:
+    # Used to load the secret Google App Credentials required to prove the app's identity to Google
     def __init__(self):
         self.client_id = os.getenv("GOOGLE_CLIENT_ID")
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
         self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8001/auth/google/callback")
         
-        # If client ID/Secret is missing, trigger Mock Flow mode
+        # Used to allow developers to test the app without needing a real Google Developer account setup
         self.is_mock = not self.client_id or not self.client_secret
         if self.is_mock:
             logger.warning("GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not configured. Google OAuth will run in DEV MOCK MODE.")
 
+    # Used to generate the exact Google Login URL that the user clicks on the frontend to grant permission
     def get_authorization_url(self, user_id: str) -> str:
-        """Generate the Google authorization URL to redirect users to."""
         if self.is_mock:
             return f"http://localhost:8001/auth/google/callback?code=mock_google_code_for_{user_id}&state={user_id}"
             
+        # Used to strictly define what we can access (read-only emails, offline access for background syncing)
         params = {
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
@@ -37,8 +40,8 @@ class GoogleOAuth:
         query_string = "&".join(f"{k}={v}" for k, v in params.items())
         return f"{url}?{query_string}"
 
+    # Used to securely trade the temporary code Google gives us for permanent Access and Refresh tokens
     async def exchange_code_for_tokens(self, code: str) -> Dict[str, Any]:
-        """Exchange the Google Authorization Code for Access & Refresh Tokens."""
         if self.is_mock or code.startswith("mock_"):
             user_id = code.replace("mock_google_code_for_", "")
             return {
@@ -62,13 +65,13 @@ class GoogleOAuth:
             res.raise_for_status()
             data = res.json()
             
-            # Fetch user email profile info
+            # Used to immediately figure out the user's real email address so we can save it in our Database
             email = await self._fetch_user_email(data.get("access_token"))
             data["email"] = email
             return data
 
+    # Used to automatically get a fresh 1-hour Access Token using the saved Refresh Token, preventing forced re-logins
     async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
-        """Fetch a fresh Google Access Token using the stored Refresh Token."""
         if self.is_mock or refresh_token.startswith("mock_"):
             return {
                 "access_token": f"mock_google_access_token_refreshed_{datetime.utcnow().timestamp()}",
@@ -88,8 +91,8 @@ class GoogleOAuth:
             res.raise_for_status()
             return res.json()
 
+    # Used to securely ask Google's Profile API for the logged-in user's exact email address
     async def _fetch_user_email(self, access_token: str) -> str:
-        """Fetch the authenticated user's email address from Google Profile APIs."""
         url = "https://www.googleapis.com/oauth2/v2/userinfo"
         headers = {"Authorization": f"Bearer {access_token}"}
         try:
@@ -101,9 +104,9 @@ class GoogleOAuth:
             logger.error(f"Failed to fetch Google profile email: {e}")
             return "unknown@gmail.com"
 
-# Singleton
 _google_oauth_instance = None
 
+# Used to enforce the Singleton pattern so we don't reload the .env variables every time a user logs in
 def get_google_oauth() -> GoogleOAuth:
     global _google_oauth_instance
     if _google_oauth_instance is None:
