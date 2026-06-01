@@ -1,6 +1,5 @@
 import os, asyncio, logging, httpx
 from typing import List, Dict, Any
-
 logger = logging.getLogger("certificate_intelligence.search_engine")
 
 class TavilySearchEngine:
@@ -55,9 +54,9 @@ class TavilySearchEngine:
             return [f'"{cert_data.certificate_name}" event details {cert_data.issuer}', f'who conducted "{cert_data.certificate_name}"', f'"{cert_data.certificate_name}" purpose course date']
 
     async def search_certificate_event(self, cert_data: Any) -> List[Dict[str, Any]]:
+        import re
         if not self.api_key: return []
-        c_name = cert_data.certificate_name.strip() if cert_data.certificate_name else ""
-        c_issuer = cert_data.issuer.strip() if cert_data.issuer else ""
+        c_name, c_issuer = (cert_data.certificate_name or "").strip(), (cert_data.issuer or "").strip()
         if not c_name and not c_issuer and not cert_data.skills: return []
         queries = await self._generate_optimal_queries(cert_data)
         logger.info(f"Generated search queries: {queries}")
@@ -65,6 +64,7 @@ class TavilySearchEngine:
             tasks = [self._search_query_with_retry(client, q) for q in queries]
             res_list = await asyncio.gather(*tasks, return_exceptions=True)
         aggregated = {}
+
         for res in res_list:
             if isinstance(res, Exception): continue
             for item in res:
@@ -75,5 +75,24 @@ class TavilySearchEngine:
                         "url": url, "score": item.get("score", 0.0), "raw_content": item.get("raw_content", "")
                     }
         unique = list(aggregated.values())
+        
+        # Apply Programmatic Domain Boosting & Word Overlap Relevance Scoring
+        for item in unique:
+            url_lower = item.get("url", "").lower()
+            score = item.get("score", 0.0)
+            
+            # Boost score for verified trusted domains
+            trusted_domains = [".edu", ".org", "amazon.com", "coursera.org", "github.com", "udemy.com", "microsoft.com", "google.com"]
+            if any(domain in url_lower for domain in trusted_domains):
+                score += 0.35
+                
+            # Boost score based on word overlap with certificate name
+            words_cert = set(re.findall(r'\w+', c_name.lower()))
+            words_snippet = set(re.findall(r'\w+', item.get("snippet", "").lower()))
+            overlap = len(words_cert & words_snippet)
+            score += overlap * 0.05
+            
+            item["score"] = score
+            
         unique.sort(key=lambda x: x.get("score", 0.0), reverse=True)
         return unique

@@ -24,6 +24,18 @@ class CertificateEmailMatcher:
             logger.info("Top heuristic score too low (<= 0.1). Skipping LLM verification.")
             return None, 0.0
 
+        # Programmatic Output Quality Bypasses & Fallbacks (No LLM required)
+        if scored[0][0] >= 7.0:
+            logger.info(f"Top heuristic score is extremely high ({scored[0][0]:.2f}). Instantly linking with 1.0 confidence (Bypassing LLM)...")
+            return scored[0][2], 1.0
+
+        if not self.groq_key:
+            logger.info("Groq API key not configured. Fallback to programmatic heuristic linking...")
+            if scored[0][0] >= 3.5:
+                return scored[0][2], 0.85
+            return None, 0.0
+
+
         top_candidates = [item for _, _, item in scored[:4]]
         prompt = build_matcher_prompt(cert, top_candidates, user_email, search_results)
         logger.info("Triggering cognitive LLM matcher verification...")

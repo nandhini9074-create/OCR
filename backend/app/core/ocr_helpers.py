@@ -1,9 +1,24 @@
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 from pypdf import PdfReader
 
 logger = logging.getLogger("certificate_intelligence.ocr_helpers")
+
+def clean_ocr_text(raw_text: str) -> str:
+    """Programmatically clean raw OCR text from junk characters, noise, and whitespace anomalies."""
+    if not raw_text: return ""
+    lines = raw_text.splitlines()
+    cleaned_lines = []
+    for line in lines:
+        cleaned = line.strip()
+        # Remove trailing/leading OCR junk characters
+        cleaned = re.sub(r'^[\s_\|\~\*\\\/]+', '', cleaned)
+        cleaned = re.sub(r'[\s_\|\~\*\\\/]+$', '', cleaned)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        if cleaned: cleaned_lines.append(cleaned)
+    return "\n".join(cleaned_lines)
 
 def extract_digital_pdf_text(pdf_path: Path) -> Optional[str]:
     """Attempt to extract native text layers from digital PDFs (fast path)."""
@@ -18,7 +33,7 @@ def extract_digital_pdf_text(pdf_path: Path) -> Optional[str]:
         combined_text = "\n".join(full_text).strip()
         if len(combined_text) > 40:
             logger.info(f"Digital text successfully extracted from PDF ({len(combined_text)} chars). Skipping OCR.")
-            return combined_text
+            return clean_ocr_text(combined_text)
         else:
             logger.info("Digital text layer was empty or too short. Falling back to OCR.")
     except Exception as e:
@@ -38,7 +53,8 @@ def run_ocr_sync(file_path: Path, ocr_reader) -> str:
         extracted_lines = [item[1] for item in result]
         raw_text = "\n".join(extracted_lines).strip()
         logger.info(f"EasyOCR completed. Extracted {len(extracted_lines)} lines ({len(raw_text)} characters).")
-        return raw_text
+        return clean_ocr_text(raw_text)
     except Exception as e:
         logger.error(f"Error executing EasyOCR on {file_path.name}: {e}")
         raise RuntimeError(f"OCR execution failed: {e}")
+

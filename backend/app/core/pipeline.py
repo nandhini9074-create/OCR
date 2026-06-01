@@ -1,7 +1,6 @@
 import time, logging
 from pathlib import Path
 from typing import Optional
-
 from app.utils.db_cache import get_cache
 from app.core.ocr_engine import get_ocr_engine
 from app.core.extractor import CertificateExtractor
@@ -17,13 +16,8 @@ logger = logging.getLogger("certificate_intelligence.pipeline")
 
 class CertificateIntelligencePipeline:
     def __init__(self):
-        self.ocr_engine = get_ocr_engine()
-        self.extractor = CertificateExtractor()
-        self.email_parser = EmailParser()
-        self.matcher = CertificateEmailMatcher()
-        self.search_engine = TavilySearchEngine()
-        self.event_analyzer = EventAnalyzer()
-        self.cache = get_cache()
+        self.ocr_engine, self.extractor, self.email_parser = get_ocr_engine(), CertificateExtractor(), EmailParser()
+        self.matcher, self.search_engine, self.event_analyzer, self.cache = CertificateEmailMatcher(), TavilySearchEngine(), EventAnalyzer(), get_cache()
 
     async def _handle_cache(self, file_hash: str, display_name: str, start_time: float) -> Optional[AnalysisResponse]:
         cached = self.cache.get_pipeline(file_hash)
@@ -43,9 +37,7 @@ class CertificateIntelligencePipeline:
         return res
 
     async def analyze_certificate(self, file_path: Path, file_hash: str, email: Optional[str] = None, original_filename: Optional[str] = None) -> AnalysisResponse:
-        start = time.time()
-        display_name = original_filename or file_path.name
-        
+        start, display_name = time.time(), original_filename or file_path.name
         cached_res = await self._handle_cache(file_hash, display_name, start)
         if cached_res: return cached_res
 
@@ -91,7 +83,6 @@ class CertificateIntelligencePipeline:
             raw_ocr_text=raw_ocr_text, ocr_method=ocr_method, raw_search_results=search_results
         )
         self.cache.save_pipeline(file_hash, response.model_dump())
-        
         write_benchmark_row(display_name, file_hash, "Fresh Run", ocr_method, t_ocr, t_extract, t_search, t_email, t_merge, execution_time, agg_conf)
         return response
 
@@ -101,3 +92,4 @@ def get_pipeline() -> CertificateIntelligencePipeline:
     global _pipeline_instance
     if _pipeline_instance is None: _pipeline_instance = CertificateIntelligencePipeline()
     return _pipeline_instance
+
