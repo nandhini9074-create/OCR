@@ -21,14 +21,19 @@ class AsynchronousEmbedder:
             self.dimensions = 768
             logger.info("Using Gemini Embeddings (768 dimensions).")
         else:
-            logger.info("No remote embedding keys found. Initializing Local SentenceTransformers model (all-MiniLM-L6-v2, 384 dimensions)...")
+            logger.info("Configured for Local SentenceTransformers (all-MiniLM-L6-v2, 384 dimensions). Model will be lazy-loaded on demand.")
+
+    def _get_local_model(self):
+        """Lazily load SentenceTransformer model weights into memory only on first call."""
+        if self.local_model is None:
+            logger.info("Initializing Local SentenceTransformers model (all-MiniLM-L6-v2)...")
             try:
                 from sentence_transformers import SentenceTransformer
-                # Lazy-load to avoid slow imports at bootstrap
                 self.local_model = SentenceTransformer("all-MiniLM-L6-v2")
                 logger.info("Local SentenceTransformers loaded successfully.")
             except Exception as e:
                 logger.error(f"Failed to load sentence-transformers: {e}. Semantic search fallbacks will fail.")
+        return self.local_model
 
     async def get_embedding(self, text: str) -> List[float]:
         """Convert a single text chunk into a dense vector embedding."""
@@ -41,17 +46,21 @@ class AsynchronousEmbedder:
             return []
 
         # 1. Local Fallback
-        if self.provider == "local" or self.local_model:
-            loop = asyncio.get_running_loop()
-            try:
-                # Delegate blocking CPU-heavy local inference to thread pool
-                embeddings = await loop.run_in_executor(
-                    None,
-                    lambda: self.local_model.encode(texts, convert_to_numpy=True).tolist()
-                )
-                return embeddings
-            except Exception as e:
-                logger.error(f"Local embedding inference failed: {e}")
+        if self.provider == "local":
+            local_model = self._get_local_model()
+            if local_model:
+                loop = asyncio.get_running_loop()
+                try:
+                    # Delegate blocking CPU-heavy local inference to thread pool
+                    embeddings = await loop.run_in_executor(
+                        None,
+                        lambda: local_model.encode(texts, convert_to_numpy=True).tolist()
+                    )
+                    return embeddings
+                except Exception as e:
+                    logger.error(f"Local embedding inference failed: {e}")
+                    return [[0.0] * self.dimensions for _ in texts]
+            else:
                 return [[0.0] * self.dimensions for _ in texts]
 
         # 2. Google Gemini Embeddings

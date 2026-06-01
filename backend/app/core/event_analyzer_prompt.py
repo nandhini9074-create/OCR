@@ -4,10 +4,16 @@ from app.schemas.models import CertificateData
 def build_event_analyzer_prompt(
     cert_data: CertificateData, search_results: List[Dict[str, Any]], email_data: Optional[Dict[str, Any]] = None
 ) -> str:
-    search_context = "".join([
-        f"Result {i}:\nTitle: {r.get('title')}\nSource: {r.get('url')}\nContent: {r.get('snippet') or r.get('content')}\n\n"
-        for i, r in enumerate(search_results, 1)
-    ]) if search_results else "No additional web search results are available."
+    search_context_list = []
+    for i, r in enumerate(search_results, 1):
+        content = r.get('snippet') or r.get('content') or ""
+        # Cap length to 600 characters for token optimization
+        if len(content) > 600:
+            content = content[:600] + "..."
+        search_context_list.append(
+            f"Result {i}:\nTitle: {r.get('title')}\nSource: {r.get('url')}\nContent: {content}\n\n"
+        )
+    search_context = "".join(search_context_list) if search_results else "No additional web search results are available."
 
     email_context = (
         f"- **Matched Subject**: {email_data.get('subject') or email_data.get('email_subject')}\n"

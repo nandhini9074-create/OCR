@@ -26,7 +26,7 @@ async def analyze_certificate(file: UploadFile = File(..., description="The cert
     logger.info(f"Received file upload request: {file.filename} with email: {email}")
     try:
         file_path, file_hash = await file_handler.save_file(file)
-        res = await pipeline.analyze_certificate(file_path=file_path, file_hash=file_hash, email=email)
+        res = await pipeline.analyze_certificate(file_path=file_path, file_hash=file_hash, email=email, original_filename=file.filename)
         _write_ocr_temp_file(res.raw_ocr_text or "(No text extracted)", res.ocr_method or "Unknown", file.filename)
         return res
     except HTTPException as he: raise he

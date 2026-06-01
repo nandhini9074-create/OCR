@@ -1,18 +1,17 @@
-import httpx, logging, asyncio
+import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import Dict, Any
 from sqlalchemy.orm import Session
 from app.models.database import SessionLocal, OAuthToken, EmailMetadata, SyncLog, User
 from app.auth.google import get_google_oauth
 from app.services.text_processor import get_text_processor
-from app.embeddings.embedder import get_embedder
-from app.qdrant import get_qdrant_store
+from app.services.email_sync_helpers import calculate_importance, fetch_gmail_emails
 
 logger = logging.getLogger("certificate_intelligence.services.email_sync")
 
 class EmailIngestService:
     def __init__(self):
-        self.text_processor, self.embedder, self.qdrant = get_text_processor(), get_embedder(), get_qdrant_store()
+        self.text_processor = get_text_processor()
 
     async def synchronize_user_inbox(self, user_id: str, provider: str) -> Dict[str, Any]:
         db: Session = SessionLocal()
@@ -36,7 +35,7 @@ class EmailIngestService:
                 db.commit()
                 access_token = token.access_token
 
-            emails = await self._fetch_gmail_emails(access_token)
+            emails = await fetch_gmail_emails(access_token)
             logger.info(f"Fetched {len(emails)} emails from google.")
 
             new_emails = [m for m in emails if not db.query(EmailMetadata).filter(EmailMetadata.user_id == user_id, EmailMetadata.email_id == m["id"]).first()]
@@ -47,32 +46,29 @@ class EmailIngestService:
                 db.commit()
                 return {"status": "completed", "synced": 0}
 
-            all_chunks = []
+            synced_count = 0
             for m in new_emails:
                 clean_body = self.text_processor.remove_signature(self.text_processor.clean_html(m["body"]))
-                chunks = self.text_processor.chunk_text(clean_body)
-                importance = self._calculate_importance(m["subject"] + " " + clean_body)
+                importance = calculate_importance(m["subject"] + " " + clean_body)
+                if importance <= 0.1: continue
                 db.add(EmailMetadata(
                     user_id=user_id, email_id=m["id"], thread_id=m.get("thread_id"), subject=m["subject"],
-                    sender=m["sender"], recipients=m.get("recipients", ""), timestamp=m["timestamp"], importance_score=importance
+                    sender=m["sender"], recipients=m.get("recipients", ""), timestamp=m["timestamp"], 
+                    importance_score=importance, body=clean_body
                 ))
-                all_chunks.extend([{
-                    "user_id": user_id, "email_id": m["id"], "subject": m["subject"], "sender": m["sender"],
-                    "recipients": m.get("recipients", "").split(","), "timestamp": m["timestamp"].isoformat(),
-                    "thread_id": m.get("thread_id", ""), "chunk_text": ch, "importance_score": importance
-                } for ch in chunks])
+                synced_count += 1
             db.commit()
 
-            if all_chunks:
-                vectors = await self.embedder.get_embeddings_batch([ch["chunk_text"] for ch in all_chunks])
-                for idx, vec in enumerate(vectors):
-                    all_chunks[idx]["vector"] = vec
-                if not await self.qdrant.upsert_email_chunks(all_chunks):
-                    raise RuntimeError("Qdrant upload failed.")
-
-            log_entry.status, log_entry.emails_synced = "completed", len(new_emails)
+            cutoff_date = datetime.utcnow() - timedelta(days=365 * 2)
+            deleted_rows = db.query(EmailMetadata).filter(
+                EmailMetadata.user_id == user_id, EmailMetadata.timestamp < cutoff_date
+            ).delete()
+            if deleted_rows: logger.info(f"Purged {deleted_rows} historical emails older than 24 months for tenant '{user_id}'")
             db.commit()
-            return {"status": "completed", "synced": len(new_emails)}
+
+            log_entry.status, log_entry.emails_synced = "completed", synced_count
+            db.commit()
+            return {"status": "completed", "synced": synced_count}
         except Exception as e:
             logger.error(f"Sync error: {e}", exc_info=True)
             log_entry.status, log_entry.error_message = "failed", str(e)
@@ -80,44 +76,6 @@ class EmailIngestService:
             return {"status": "failed", "error": str(e)}
         finally:
             db.close()
-
-    def _calculate_importance(self, text: str) -> float:
-        keywords = {"certificate": 0.4, "credential": 0.4, "publication": 0.5, "published": 0.4, "completion": 0.3, "workshop": 0.2, "congratulations": 0.3, "congratulate": 0.3, "verified": 0.2, "important": 0.2, "hackathon": 0.3}
-        return min(round(0.1 + sum(val for kw, val in keywords.items() if kw in text.lower()), 2), 1.0)
-
-    async def _fetch_gmail_emails(self, token: str) -> List[Dict[str, Any]]:
-        emails, headers = [], {"Authorization": f"Bearer {token}"}
-        async with httpx.AsyncClient() as client:
-            res = await client.get("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20", headers=headers)
-            res.raise_for_status()
-            for msg in res.json().get("messages", []):
-                m_res = await client.get(f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg['id']}", headers=headers)
-                if m_res.status_code != 200: continue
-                detail = m_res.json()
-                h_list = detail.get("payload", {}).get("headers", [])
-                sub = next((h["value"] for h in h_list if h["name"].lower() == "subject"), "No Subject")
-                snd = next((h["value"] for h in h_list if h["name"].lower() == "from"), "Unknown Sender")
-                rec = next((h["value"] for h in h_list if h["name"].lower() == "to"), "")
-                dt = next((h["value"] for h in h_list if h["name"].lower() == "date"), None)
-                ts = datetime.utcnow()
-                if dt:
-                    try:
-                        import email.utils
-                        t = email.utils.parsedate_tz(dt)
-                        if t: ts = datetime.fromtimestamp(email.utils.mktime_tz(t))
-                    except: pass
-                body, parts = "", [detail.get("payload", {})]
-                while parts:
-                    p = parts.pop()
-                    if p.get("parts"): parts.extend(p["parts"])
-                    b_data = p.get("body", {}).get("data")
-                    if b_data:
-                        try:
-                            import base64
-                            body += base64.urlsafe_b64decode(b_data.encode()).decode("utf-8", errors="ignore") + "\n"
-                        except: pass
-                emails.append({"id": msg["id"], "thread_id": detail.get("threadId"), "subject": sub, "sender": snd, "recipients": rec, "timestamp": ts, "body": body if body.strip() else detail.get("snippet", "")})
-        return emails
 
 _sync_instance = None
 

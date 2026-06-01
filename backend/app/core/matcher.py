@@ -10,7 +10,7 @@ logger = logging.getLogger("certificate_intelligence.matcher")
 class CertificateEmailMatcher:
     def __init__(self):
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.groq_model = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+        self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
     async def find_best_email_match(
         self, cert: CertificateData, emails: List[Dict[str, Any]], user_email: Optional[str] = None, search_results: Optional[List[Dict[str, Any]]] = None
